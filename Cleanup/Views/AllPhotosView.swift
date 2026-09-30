@@ -4,12 +4,14 @@ import Photos
 struct AllPhotosView: View {
     @ObservedObject var scanner: PhotoLibraryScanner
     @ObservedObject var cleaner: MediaCleaner
+    @Binding var isTabBarVisible: Bool
     @StateObject private var vaultManager = VaultManager()
     
     @State private var selectedAssetIDs: Set<String> = []
     @State private var previewIndex: Int? = nil
     @State private var showReviewModal: Bool = false
     @State private var showCompletionScreen: Bool = false
+    @State private var lastScrollOffset: CGFloat = 0
     
     private let columns = [
         GridItem(.flexible(), spacing: 2),
@@ -78,6 +80,14 @@ struct AllPhotosView: View {
                     
                     // Pixel-Perfect Square Photos Grid
                     ScrollView {
+                        GeometryReader { proxy in
+                            Color.clear.preference(
+                                key: ScrollOffsetPreferenceKey.self,
+                                value: proxy.frame(in: .named("allPhotosScroll")).minY
+                            )
+                        }
+                        .frame(height: 0)
+                        
                         LazyVGrid(columns: columns, spacing: 2) {
                             ForEach(Array(scanner.allPhotos.enumerated()), id: \.element.id) { index, item in
                                 ZStack(alignment: .bottomTrailing) {
@@ -113,11 +123,36 @@ struct AllPhotosView: View {
                         }
                         .padding(.bottom, selectedAssetIDs.isEmpty ? 90 : 160)
                     }
+                    .coordinateSpace(name: "allPhotosScroll")
+                    .onPreferenceChange(ScrollOffsetPreferenceKey.self) { currentOffset in
+                        guard previewIndex == nil else { return }
+                        let delta = currentOffset - lastScrollOffset
+                        if currentOffset > -15 {
+                            if !isTabBarVisible {
+                                withAnimation(.easeInOut(duration: 0.3)) {
+                                    isTabBarVisible = true
+                                }
+                            }
+                        } else if delta < -12 {
+                            if isTabBarVisible {
+                                withAnimation(.easeInOut(duration: 0.3)) {
+                                    isTabBarVisible = false
+                                }
+                            }
+                        } else if delta > 12 {
+                            if !isTabBarVisible {
+                                withAnimation(.easeInOut(duration: 0.3)) {
+                                    isTabBarVisible = true
+                                }
+                            }
+                        }
+                        lastScrollOffset = currentOffset
+                    }
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             
-            // Bottom Floating Glassy Delete Action Bar (Positioned Flush Above Glassy Tab Bar)
+            // Bottom Floating Glassy Delete Action Bar
             if !selectedAssetIDs.isEmpty {
                 HStack(spacing: 16) {
                     VStack(alignment: .leading, spacing: 2) {
@@ -151,11 +186,11 @@ struct AllPhotosView: View {
                 .padding(16)
                 .liquidGlassCard(cornerRadius: 26, highlightOpacity: 0.4)
                 .padding(.horizontal, 16)
-                .padding(.bottom, 82)
+                .padding(.bottom, isTabBarVisible ? 82 : 16)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
             
-            // Full Screen Swipable Gallery Modal (With Lock to Vault 🔒)
+            // Full Screen Swipable Gallery Modal
             if let index = previewIndex {
                 ImagePreviewGalleryModal(
                     items: scanner.allPhotos,
@@ -172,6 +207,11 @@ struct AllPhotosView: View {
                     }
                 )
                 .ignoresSafeArea()
+            }
+        }
+        .onChange(of: previewIndex) { newIndex in
+            withAnimation(.easeInOut(duration: 0.25)) {
+                isTabBarVisible = (newIndex == nil)
             }
         }
         .sheet(isPresented: $showReviewModal) {

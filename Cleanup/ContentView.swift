@@ -8,6 +8,7 @@ struct ContentView: View {
     
     @State private var selectedTab: AppTab = .dashboard
     @State private var mediaSubFilter: MediaSubFilter = .similar
+    @State private var isTabBarVisible: Bool = true
     @AppStorage("userThemePreference") private var selectedThemeRaw: String = ThemeOption.system.rawValue
     
     var preferredColorScheme: ColorScheme? {
@@ -62,7 +63,12 @@ struct ContentView: View {
                         }
                     )
                 case .media:
-                    MediaSessionView(scanner: scanner, cleaner: cleaner, selectedFilter: $mediaSubFilter)
+                    MediaSessionView(
+                        scanner: scanner,
+                        cleaner: cleaner,
+                        selectedFilter: $mediaSubFilter,
+                        isTabBarVisible: $isTabBarVisible
+                    )
                 case .contacts:
                     ContactsSessionView(scanner: contactScanner, cleaner: cleaner, permissionManager: permissionManager)
                 case .utilities:
@@ -74,7 +80,15 @@ struct ContentView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             
             // Bottom Floating Liquid Glass Navigation Bar
-            GlassyTabBar(selectedTab: $selectedTab)
+            if isTabBarVisible || selectedTab != .media {
+                GlassyTabBar(selectedTab: $selectedTab)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .onChange(of: selectedTab) { _ in
+            withAnimation(.easeInOut(duration: 0.3)) {
+                isTabBarVisible = true
+            }
         }
         .preferredColorScheme(preferredColorScheme)
     }

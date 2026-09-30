@@ -24,6 +24,7 @@ struct MediaSessionView: View {
     @ObservedObject var scanner: PhotoLibraryScanner
     @ObservedObject var cleaner: MediaCleaner
     @Binding var selectedFilter: MediaSubFilter
+    @Binding var isTabBarVisible: Bool
     
     var body: some View {
         NavigationStack {
@@ -74,21 +75,26 @@ struct MediaSessionView: View {
                 Group {
                     switch selectedFilter {
                     case .similar:
-                        SimilarPhotosView(scanner: scanner, cleaner: cleaner)
+                        SimilarPhotosView(scanner: scanner, cleaner: cleaner, isTabBarVisible: $isTabBarVisible)
                     case .screenshots:
-                        ScreenshotsView(scanner: scanner, cleaner: cleaner)
+                        ScreenshotsView(scanner: scanner, cleaner: cleaner, isTabBarVisible: $isTabBarVisible)
                     case .videos:
-                        LargeVideosView(scanner: scanner, cleaner: cleaner)
+                        LargeVideosView(scanner: scanner, cleaner: cleaner, isTabBarVisible: $isTabBarVisible)
                     case .blurry:
-                        BlurryPhotosView(scanner: scanner, cleaner: cleaner)
+                        BlurryPhotosView(scanner: scanner, cleaner: cleaner, isTabBarVisible: $isTabBarVisible)
                     case .all:
-                        AllPhotosView(scanner: scanner, cleaner: cleaner)
+                        AllPhotosView(scanner: scanner, cleaner: cleaner, isTabBarVisible: $isTabBarVisible)
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             .navigationTitle("Media Clean")
             .navigationBarTitleDisplayMode(.inline)
+            .onChange(of: selectedFilter) { _ in
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    isTabBarVisible = true
+                }
+            }
         }
     }
 }

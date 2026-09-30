@@ -4,12 +4,14 @@ import Photos
 struct BlurryPhotosView: View {
     @ObservedObject var scanner: PhotoLibraryScanner
     @ObservedObject var cleaner: MediaCleaner
+    @Binding var isTabBarVisible: Bool
     @StateObject private var vaultManager = VaultManager()
     
     @State private var selectedIDs: Set<String> = []
     @State private var previewIndex: Int? = nil
     @State private var showReviewModal: Bool = false
     @State private var showCompletionScreen: Bool = false
+    @State private var lastScrollOffset: CGFloat = 0
     
     let columns = [
         GridItem(.flexible(), spacing: 10),
@@ -67,6 +69,14 @@ struct BlurryPhotosView: View {
                     .padding()
                     
                     ScrollView {
+                        GeometryReader { proxy in
+                            Color.clear.preference(
+                                key: ScrollOffsetPreferenceKey.self,
+                                value: proxy.frame(in: .named("blurryScroll")).minY
+                            )
+                        }
+                        .frame(height: 0)
+                        
                         LazyVGrid(columns: columns, spacing: 10) {
                             ForEach(Array(scanner.blurryPhotos.enumerated()), id: \.element.id) { index, item in
                                 ZStack(alignment: .topTrailing) {
@@ -113,6 +123,31 @@ struct BlurryPhotosView: View {
                         .padding(.horizontal)
                         .padding(.bottom, selectedIDs.isEmpty ? 90 : 160)
                     }
+                    .coordinateSpace(name: "blurryScroll")
+                    .onPreferenceChange(ScrollOffsetPreferenceKey.self) { currentOffset in
+                        guard previewIndex == nil else { return }
+                        let delta = currentOffset - lastScrollOffset
+                        if currentOffset > -15 {
+                            if !isTabBarVisible {
+                                withAnimation(.easeInOut(duration: 0.3)) {
+                                    isTabBarVisible = true
+                                }
+                            }
+                        } else if delta < -12 {
+                            if isTabBarVisible {
+                                withAnimation(.easeInOut(duration: 0.3)) {
+                                    isTabBarVisible = false
+                                }
+                            }
+                        } else if delta > 12 {
+                            if !isTabBarVisible {
+                                withAnimation(.easeInOut(duration: 0.3)) {
+                                    isTabBarVisible = true
+                                }
+                            }
+                        }
+                        lastScrollOffset = currentOffset
+                    }
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -151,11 +186,11 @@ struct BlurryPhotosView: View {
                 .padding(16)
                 .liquidGlassCard(cornerRadius: 26, highlightOpacity: 0.4)
                 .padding(.horizontal, 16)
-                .padding(.bottom, 82)
+                .padding(.bottom, isTabBarVisible ? 82 : 16)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
             
-            // Full Screen Swipable Gallery Modal (With Lock to Vault 🔒)
+            // Full Screen Swipable Gallery Modal
             if let index = previewIndex {
                 ImagePreviewGalleryModal(
                     items: scanner.blurryPhotos,
@@ -176,6 +211,11 @@ struct BlurryPhotosView: View {
         }
         .navigationTitle("Blurry Photos")
         .navigationBarTitleDisplayMode(.inline)
+        .onChange(of: previewIndex) { newIndex in
+            withAnimation(.easeInOut(duration: 0.25)) {
+                isTabBarVisible = (newIndex == nil)
+            }
+        }
         .sheet(isPresented: $showReviewModal) {
             ReviewDeleteView(
                 similarPhotos: [],

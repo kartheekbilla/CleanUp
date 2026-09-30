@@ -5,12 +5,15 @@ import AVKit
 struct LargeVideosView: View {
     @ObservedObject var scanner: PhotoLibraryScanner
     @ObservedObject var cleaner: MediaCleaner
+    @Binding var isTabBarVisible: Bool
     
     @State private var selectedIDs: Set<String> = []
     @State private var previewAsset: PHAsset? = nil
     @State private var playerURL: URL? = nil
     @State private var showReviewModal: Bool = false
     @State private var showCompletionScreen: Bool = false
+    @State private var lastScrollOffset: CGFloat = 0
+    @State private var playerURLWrapper: URLIdentifiable? = nil
     
     var selectedAssets: [PhotoAssetItem] {
         scanner.largeVideos.filter { selectedIDs.contains($0.id) }
@@ -34,8 +37,26 @@ struct LargeVideosView: View {
                         Spacer()
                     }
                 } else {
-                    List {
-                        Section(header: Text("Sorted Largest to Smallest")) {
+                    ScrollView {
+                        GeometryReader { proxy in
+                            Color.clear.preference(
+                                key: ScrollOffsetPreferenceKey.self,
+                                value: proxy.frame(in: .named("videosScroll")).minY
+                            )
+                        }
+                        .frame(height: 0)
+                        
+                        LazyVStack(spacing: 12) {
+                            HStack {
+                                Text("Sorted Largest to Smallest")
+                                    .font(.caption)
+                                    .fontWeight(.semibold)
+                                    .foregroundColor(.secondary)
+                                Spacer()
+                            }
+                            .padding(.horizontal)
+                            .padding(.top, 4)
+                            
                             ForEach(scanner.largeVideos) { item in
                                 VideoRowView(
                                     item: item,
@@ -51,16 +72,43 @@ struct LargeVideosView: View {
                                         playVideo(asset: item.asset)
                                     }
                                 )
+                                .padding(12)
+                                .liquidGlassCard(cornerRadius: 16)
+                                .padding(.horizontal)
                             }
                         }
+                        .padding(.bottom, selectedIDs.isEmpty ? 90 : 160)
                     }
-                    .listStyle(.insetGrouped)
-                    .padding(.bottom, selectedIDs.isEmpty ? 90 : 160)
+                    .coordinateSpace(name: "videosScroll")
+                    .onPreferenceChange(ScrollOffsetPreferenceKey.self) { currentOffset in
+                        guard playerURLWrapper == nil else { return }
+                        let delta = currentOffset - lastScrollOffset
+                        if currentOffset > -15 {
+                            if !isTabBarVisible {
+                                withAnimation(.easeInOut(duration: 0.3)) {
+                                    isTabBarVisible = true
+                                }
+                            }
+                        } else if delta < -12 {
+                            if isTabBarVisible {
+                                withAnimation(.easeInOut(duration: 0.3)) {
+                                    isTabBarVisible = false
+                                }
+                            }
+                        } else if delta > 12 {
+                            if !isTabBarVisible {
+                                withAnimation(.easeInOut(duration: 0.3)) {
+                                    isTabBarVisible = true
+                                }
+                            }
+                        }
+                        lastScrollOffset = currentOffset
+                    }
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             
-            // Bottom Floating Clean Bar (Positioned Flush Above Glassy Tab Bar)
+            // Bottom Floating Clean Bar
             if !selectedIDs.isEmpty {
                 HStack(spacing: 16) {
                     VStack(alignment: .leading, spacing: 2) {
@@ -94,12 +142,17 @@ struct LargeVideosView: View {
                 .padding(16)
                 .liquidGlassCard(cornerRadius: 26, highlightOpacity: 0.4)
                 .padding(.horizontal, 16)
-                .padding(.bottom, 82)
+                .padding(.bottom, isTabBarVisible ? 82 : 16)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
         .navigationTitle("Large Videos")
         .navigationBarTitleDisplayMode(.inline)
+        .onChange(of: playerURLWrapper != nil) { isPlaying in
+            withAnimation(.easeInOut(duration: 0.25)) {
+                isTabBarVisible = !isPlaying
+            }
+        }
         .sheet(item: $playerURLWrapper) { wrapper in
             VideoPlayerSheet(url: wrapper.url)
         }
@@ -130,8 +183,6 @@ struct LargeVideosView: View {
             )
         }
     }
-    
-    @State private var playerURLWrapper: URLIdentifiable? = nil
     
     private func playVideo(asset: PHAsset) {
         let options = PHVideoRequestOptions()
@@ -226,6 +277,5 @@ struct VideoRowView: View {
             
             Spacer()
         }
-        .padding(.vertical, 4)
     }
 }

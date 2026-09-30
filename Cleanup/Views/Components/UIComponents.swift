@@ -1,6 +1,14 @@
 import SwiftUI
 import Photos
 
+// MARK: - Scroll Offset Tracking Preference Key
+struct ScrollOffsetPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
 // MARK: - Liquid Glass View Modifier
 struct LiquidGlassModifier: ViewModifier {
     var cornerRadius: CGFloat = 24
