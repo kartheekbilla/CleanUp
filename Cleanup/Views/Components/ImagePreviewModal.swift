@@ -31,7 +31,8 @@ struct ImagePreviewGalleryModal: View {
                                 .fontWeight(.bold)
                                 .foregroundColor(.white.opacity(0.7))
                             Text("\(currentItem.formattedSize) • \(currentItem.pixelWidth) × \(currentItem.pixelHeight)")
-                                .font(.headline)
+                                .font(.subheadline)
+                                .fontWeight(.semibold)
                                 .foregroundColor(.white)
                         }
                         
@@ -39,32 +40,44 @@ struct ImagePreviewGalleryModal: View {
                         
                         Button(action: onDismiss) {
                             Image(systemName: "xmark.circle.fill")
-                                .font(.title)
+                                .font(.system(size: 28))
                                 .foregroundColor(.white.opacity(0.85))
                         }
                     }
-                    .padding(.horizontal)
-                    .padding(.top, 16)
-                    .padding(.bottom, 8)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 50)
+                    .padding(.bottom, 12)
+                    .background(
+                        LinearGradient(
+                            colors: [Color.black.opacity(0.8), Color.black.opacity(0.4), Color.clear],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
                     
                     // Side-by-Side Swipable Gallery Page View
-                    TabView(selection: $selectedIndex) {
-                        ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
-                            VStack {
-                                Spacer()
-                                PHAssetImageView(asset: item.asset, targetSize: CGSize(width: 1200, height: 1200), contentMode: .fit)
-                                    .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                                    .padding(.horizontal, 12)
-                                    .shadow(color: Color.black.opacity(0.6), radius: 15, x: 0, y: 8)
-                                Spacer()
+                    GeometryReader { geo in
+                        TabView(selection: $selectedIndex) {
+                            ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                                ZStack {
+                                    PHAssetImageView(
+                                        asset: item.asset,
+                                        targetSize: CGSize(width: geo.size.width * 2, height: geo.size.height * 2),
+                                        contentMode: .fit
+                                    )
+                                    .frame(maxWidth: geo.size.width, maxHeight: geo.size.height)
+                                    .aspectRatio(contentMode: .fit)
+                                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                                    .shadow(color: Color.black.opacity(0.5), radius: 12, x: 0, y: 6)
+                                }
+                                .tag(index)
                             }
-                            .tag(index)
                         }
+                        .tabViewStyle(.page(indexDisplayMode: .always))
                     }
-                    .tabViewStyle(.page(indexDisplayMode: .always))
                     
                     // Bottom Control Bar (Move to Vault 🔒 & Delete)
-                    VStack(spacing: 12) {
+                    VStack(spacing: 10) {
                         if let msg = lockStatusMessage {
                             Text(msg)
                                 .font(.caption)
@@ -73,7 +86,7 @@ struct ImagePreviewGalleryModal: View {
                                 .transition(.opacity)
                         }
                         
-                        HStack(spacing: 20) {
+                        HStack(spacing: 16) {
                             // Lock to Private Vault Button
                             Button(action: lockCurrentItemToVault) {
                                 HStack(spacing: 8) {
@@ -82,13 +95,13 @@ struct ImagePreviewGalleryModal: View {
                                             .tint(.white)
                                     } else {
                                         Image(systemName: "lock.shield.fill")
-                                        Text("Move to Private Vault")
+                                        Text("Move to Vault")
                                     }
                                 }
                                 .font(.subheadline)
                                 .fontWeight(.bold)
                                 .foregroundColor(.white)
-                                .padding(.horizontal, 18)
+                                .padding(.horizontal, 20)
                                 .padding(.vertical, 12)
                                 .background(
                                     Capsule()
@@ -100,19 +113,32 @@ struct ImagePreviewGalleryModal: View {
                             
                             // Delete Photo Button
                             Button(action: deleteCurrentItem) {
-                                Image(systemName: "trash.fill")
-                                    .font(.title3)
-                                    .foregroundColor(.white)
-                                    .padding(12)
-                                    .background(
-                                        Circle()
-                                            .fill(Color.red)
-                                            .shadow(color: Color.red.opacity(0.4), radius: 8, x: 0, y: 4)
-                                    )
+                                HStack(spacing: 6) {
+                                    Image(systemName: "trash.fill")
+                                    Text("Delete")
+                                }
+                                .font(.subheadline)
+                                .fontWeight(.bold)
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 20)
+                                .padding(.vertical, 12)
+                                .background(
+                                    Capsule()
+                                        .fill(Color.red)
+                                        .shadow(color: Color.red.opacity(0.4), radius: 8, x: 0, y: 4)
+                                )
                             }
                         }
-                        .padding(.bottom, 24)
+                        .padding(.bottom, 36)
                     }
+                    .padding(.top, 12)
+                    .background(
+                        LinearGradient(
+                            colors: [Color.clear, Color.black.opacity(0.5), Color.black.opacity(0.9)],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
                 }
             } else {
                 VStack {
@@ -125,6 +151,7 @@ struct ImagePreviewGalleryModal: View {
                 }
             }
         }
+        .ignoresSafeArea()
     }
     
     private func lockCurrentItemToVault() {
@@ -134,7 +161,6 @@ struct ImagePreviewGalleryModal: View {
         
         Task {
             let manager = PHImageManager.default()
-            let options = PHVideoRequestOptions()
             let imageOptions = PHImageRequestOptions()
             imageOptions.isNetworkAccessAllowed = true
             imageOptions.deliveryMode = .highQualityFormat

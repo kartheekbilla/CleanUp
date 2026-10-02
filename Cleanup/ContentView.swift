@@ -7,7 +7,7 @@ struct ContentView: View {
     @StateObject private var cleaner = MediaCleaner()
     
     @State private var selectedTab: AppTab = .dashboard
-    @State private var mediaSubFilter: MediaSubFilter = .similar
+    @State private var mediaSubFilter: MediaSubFilter? = nil
     @State private var isTabBarVisible: Bool = true
     @AppStorage("userThemePreference") private var selectedThemeRaw: String = ThemeOption.system.rawValue
     

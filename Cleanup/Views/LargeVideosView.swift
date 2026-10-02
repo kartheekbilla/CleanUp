@@ -6,6 +6,7 @@ struct LargeVideosView: View {
     @ObservedObject var scanner: PhotoLibraryScanner
     @ObservedObject var cleaner: MediaCleaner
     @Binding var isTabBarVisible: Bool
+    var onBack: (() -> Void)? = nil
     
     @State private var selectedIDs: Set<String> = []
     @State private var previewAsset: PHAsset? = nil
@@ -14,18 +15,118 @@ struct LargeVideosView: View {
     @State private var showCompletionScreen: Bool = false
     @State private var lastScrollOffset: CGFloat = 0
     @State private var playerURLWrapper: URLIdentifiable? = nil
+    @State private var isSortAscending: Bool = false
+    
+    var sortedVideos: [PhotoAssetItem] {
+        if isSortAscending {
+            return scanner.largeVideos.sorted { $0.fileSize < $1.fileSize }
+        } else {
+            return scanner.largeVideos.sorted { $0.fileSize > $1.fileSize }
+        }
+    }
     
     var selectedAssets: [PhotoAssetItem] {
-        scanner.largeVideos.filter { selectedIDs.contains($0.id) }
+        sortedVideos.filter { selectedIDs.contains($0.id) }
     }
     
     var selectedBytes: Int64 {
         selectedAssets.reduce(0) { $0 + $1.fileSize }
     }
     
+    var allSelected: Bool {
+        !sortedVideos.isEmpty && selectedIDs.count == sortedVideos.count
+    }
+    
     var body: some View {
         ZStack(alignment: .bottom) {
             VStack(spacing: 0) {
+                // Category Header matching reference design
+                VStack(spacing: 12) {
+                    HStack(alignment: .center, spacing: 12) {
+                        if let onBack = onBack {
+                            Button(action: onBack) {
+                                Image(systemName: "chevron.left")
+                                    .font(.system(size: 16, weight: .bold))
+                                    .foregroundColor(.primary)
+                                    .padding(10)
+                                    .background(
+                                        Circle()
+                                            .fill(Color(UIColor.secondarySystemGroupedBackground))
+                                            .shadow(color: Color.black.opacity(0.06), radius: 4, x: 0, y: 2)
+                                    )
+                            }
+                        }
+                        
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Videos")
+                                .font(.system(size: 24, weight: .bold))
+                                .foregroundColor(.primary)
+                            
+                            HStack(spacing: 6) {
+                                Text("\(scanner.largeVideos.count) items • \(StorageManager.formatBytes(scanner.totalVideoBytes))")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                
+                                Text("•")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                
+                                HStack(spacing: 3) {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .font(.caption2)
+                                        .foregroundColor(Color(red: 0.13, green: 0.77, blue: 0.36))
+                                    Text("Ready to clean")
+                                        .font(.caption2)
+                                        .fontWeight(.semibold)
+                                        .foregroundColor(Color(red: 0.13, green: 0.77, blue: 0.36))
+                                }
+                            }
+                        }
+                        
+                        Spacer()
+                        
+                        HStack(spacing: 8) {
+                            Button(action: {
+                                if allSelected {
+                                    selectedIDs.removeAll()
+                                } else {
+                                    selectedIDs = Set(sortedVideos.map { $0.id })
+                                }
+                            }) {
+                                Text(allSelected ? "Deselect All" : "Select All")
+                                    .font(.subheadline)
+                                    .fontWeight(.bold)
+                                    .foregroundColor(Color(red: 0.13, green: 0.77, blue: 0.36))
+                                    .padding(.horizontal, 14)
+                                    .padding(.vertical, 7)
+                                    .background(
+                                        Capsule()
+                                            .fill(Color(red: 0.13, green: 0.77, blue: 0.36).opacity(0.15))
+                                    )
+                            }
+                            
+                            Button(action: {
+                                withAnimation {
+                                    isSortAscending.toggle()
+                                }
+                            }) {
+                                Image(systemName: "arrow.up.arrow.down")
+                                    .font(.subheadline)
+                                    .fontWeight(.semibold)
+                                    .foregroundColor(.primary)
+                                    .padding(8)
+                                    .background(
+                                        Circle()
+                                            .fill(Color(UIColor.secondarySystemGroupedBackground))
+                                    )
+                            }
+                        }
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .background(Color(UIColor.systemBackground))
+                
                 if scanner.largeVideos.isEmpty {
                     VStack(spacing: 16) {
                         Spacer()
@@ -47,17 +148,7 @@ struct LargeVideosView: View {
                         .frame(height: 0)
                         
                         LazyVStack(spacing: 12) {
-                            HStack {
-                                Text("Sorted Largest to Smallest")
-                                    .font(.caption)
-                                    .fontWeight(.semibold)
-                                    .foregroundColor(.secondary)
-                                Spacer()
-                            }
-                            .padding(.horizontal)
-                            .padding(.top, 4)
-                            
-                            ForEach(scanner.largeVideos) { item in
+                            ForEach(sortedVideos) { item in
                                 VideoRowView(
                                     item: item,
                                     isSelected: selectedIDs.contains(item.id),
@@ -77,25 +168,26 @@ struct LargeVideosView: View {
                                 .padding(.horizontal)
                             }
                         }
-                        .padding(.bottom, selectedIDs.isEmpty ? 90 : 160)
+                        .padding(.top, 4)
+                        .padding(.bottom, selectedIDs.isEmpty ? 90 : 150)
                     }
                     .coordinateSpace(name: "videosScroll")
                     .onPreferenceChange(ScrollOffsetPreferenceKey.self) { currentOffset in
                         guard playerURLWrapper == nil else { return }
                         let delta = currentOffset - lastScrollOffset
-                        if currentOffset > -15 {
+                        if currentOffset > -10 {
                             if !isTabBarVisible {
                                 withAnimation(.easeInOut(duration: 0.3)) {
                                     isTabBarVisible = true
                                 }
                             }
-                        } else if delta < -12 {
+                        } else if delta < -5 {
                             if isTabBarVisible {
                                 withAnimation(.easeInOut(duration: 0.3)) {
                                     isTabBarVisible = false
                                 }
                             }
-                        } else if delta > 12 {
+                        } else if delta > 5 {
                             if !isTabBarVisible {
                                 withAnimation(.easeInOut(duration: 0.3)) {
                                     isTabBarVisible = true
@@ -108,46 +200,47 @@ struct LargeVideosView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             
-            // Bottom Floating Clean Bar
+            // Compact Floating Clean Action Bar
             if !selectedIDs.isEmpty {
-                HStack(spacing: 16) {
+                HStack(spacing: 12) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("\(selectedIDs.count) Videos Selected")
+                        Text("\(selectedIDs.count) Selected")
                             .font(.subheadline)
                             .fontWeight(.bold)
                         Text("Reclaim \(StorageManager.formatBytes(selectedBytes))")
-                            .font(.caption)
-                            .foregroundColor(.orange)
+                            .font(.caption2)
+                            .foregroundColor(Color(red: 0.13, green: 0.77, blue: 0.36))
                             .fontWeight(.semibold)
                     }
                     
                     Spacer()
                     
                     Button(action: { showReviewModal = true }) {
-                        HStack(spacing: 8) {
+                        HStack(spacing: 6) {
                             Image(systemName: "trash.fill")
-                            Text("Clean Videos")
+                                .font(.caption)
+                            Text("Delete")
+                                .font(.subheadline)
+                                .fontWeight(.bold)
                         }
-                        .font(.headline)
                         .foregroundColor(.white)
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 12)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
                         .background(
                             Capsule()
-                                .fill(Color.orange)
-                                .shadow(color: Color.orange.opacity(0.4), radius: 8, x: 0, y: 4)
+                                .fill(Color(red: 0.13, green: 0.77, blue: 0.36))
+                                .shadow(color: Color(red: 0.13, green: 0.77, blue: 0.36).opacity(0.35), radius: 6, x: 0, y: 3)
                         )
                     }
                 }
-                .padding(16)
-                .liquidGlassCard(cornerRadius: 26, highlightOpacity: 0.4)
-                .padding(.horizontal, 16)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .liquidGlassCard(cornerRadius: 20, highlightOpacity: 0.4)
+                .padding(.horizontal, 20)
                 .padding(.bottom, isTabBarVisible ? 82 : 16)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
-        .navigationTitle("Large Videos")
-        .navigationBarTitleDisplayMode(.inline)
         .onChange(of: playerURLWrapper != nil) { isPlaying in
             withAnimation(.easeInOut(duration: 0.25)) {
                 isTabBarVisible = !isPlaying
@@ -234,7 +327,7 @@ struct VideoRowView: View {
             Button(action: onToggle) {
                 Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
                     .font(.system(size: 24))
-                    .foregroundColor(isSelected ? .orange : .gray)
+                    .foregroundColor(isSelected ? Color(red: 0.13, green: 0.77, blue: 0.36) : .gray)
             }
             
             // Video Thumbnail

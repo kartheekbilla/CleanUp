@@ -5,6 +5,7 @@ struct ScreenshotsView: View {
     @ObservedObject var scanner: PhotoLibraryScanner
     @ObservedObject var cleaner: MediaCleaner
     @Binding var isTabBarVisible: Bool
+    var onBack: (() -> Void)? = nil
     @StateObject private var vaultManager = VaultManager()
     
     @State private var selectedIDs: Set<String> = []
@@ -12,6 +13,7 @@ struct ScreenshotsView: View {
     @State private var showReviewModal: Bool = false
     @State private var showCompletionScreen: Bool = false
     @State private var lastScrollOffset: CGFloat = 0
+    @State private var isSortAscending: Bool = false
     
     let columns = [
         GridItem(.flexible(), spacing: 10),
@@ -19,17 +21,116 @@ struct ScreenshotsView: View {
         GridItem(.flexible(), spacing: 10)
     ]
     
+    var sortedScreenshots: [PhotoAssetItem] {
+        if isSortAscending {
+            return scanner.screenshots.sorted { $0.fileSize < $1.fileSize }
+        } else {
+            return scanner.screenshots
+        }
+    }
+    
     var selectedAssets: [PhotoAssetItem] {
-        scanner.screenshots.filter { selectedIDs.contains($0.id) }
+        sortedScreenshots.filter { selectedIDs.contains($0.id) }
     }
     
     var selectedBytes: Int64 {
         selectedAssets.reduce(0) { $0 + $1.fileSize }
     }
     
+    var allSelected: Bool {
+        !sortedScreenshots.isEmpty && selectedIDs.count == sortedScreenshots.count
+    }
+    
     var body: some View {
         ZStack(alignment: .bottom) {
             VStack(spacing: 0) {
+                // Category Header matching reference design
+                VStack(spacing: 12) {
+                    HStack(alignment: .center, spacing: 12) {
+                        if let onBack = onBack {
+                            Button(action: onBack) {
+                                Image(systemName: "chevron.left")
+                                    .font(.system(size: 16, weight: .bold))
+                                    .foregroundColor(.primary)
+                                    .padding(10)
+                                    .background(
+                                        Circle()
+                                            .fill(Color(UIColor.secondarySystemGroupedBackground))
+                                            .shadow(color: Color.black.opacity(0.06), radius: 4, x: 0, y: 2)
+                                    )
+                            }
+                        }
+                        
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Screenshots")
+                                .font(.system(size: 24, weight: .bold))
+                                .foregroundColor(.primary)
+                            
+                            HStack(spacing: 6) {
+                                Text("\(scanner.screenshots.count) items • \(StorageManager.formatBytes(scanner.totalScreenshotBytes))")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                
+                                Text("•")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                
+                                HStack(spacing: 3) {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .font(.caption2)
+                                        .foregroundColor(Color(red: 0.13, green: 0.77, blue: 0.36))
+                                    Text("Ready to clean")
+                                        .font(.caption2)
+                                        .fontWeight(.semibold)
+                                        .foregroundColor(Color(red: 0.13, green: 0.77, blue: 0.36))
+                                }
+                            }
+                        }
+                        
+                        Spacer()
+                        
+                        HStack(spacing: 8) {
+                            Button(action: {
+                                if allSelected {
+                                    selectedIDs.removeAll()
+                                } else {
+                                    selectedIDs = Set(sortedScreenshots.map { $0.id })
+                                }
+                            }) {
+                                Text(allSelected ? "Deselect All" : "Select All")
+                                    .font(.subheadline)
+                                    .fontWeight(.bold)
+                                    .foregroundColor(Color(red: 0.13, green: 0.77, blue: 0.36))
+                                    .padding(.horizontal, 14)
+                                    .padding(.vertical, 7)
+                                    .background(
+                                        Capsule()
+                                            .fill(Color(red: 0.13, green: 0.77, blue: 0.36).opacity(0.15))
+                                    )
+                            }
+                            
+                            Button(action: {
+                                withAnimation {
+                                    isSortAscending.toggle()
+                                }
+                            }) {
+                                Image(systemName: "arrow.up.arrow.down")
+                                    .font(.subheadline)
+                                    .fontWeight(.semibold)
+                                    .foregroundColor(.primary)
+                                    .padding(8)
+                                    .background(
+                                        Circle()
+                                            .fill(Color(UIColor.secondarySystemGroupedBackground))
+                                    )
+                            }
+                        }
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .background(Color(UIColor.systemBackground))
+                
                 if scanner.screenshots.isEmpty {
                     VStack(spacing: 16) {
                         Spacer()
@@ -41,31 +142,6 @@ struct ScreenshotsView: View {
                         Spacer()
                     }
                 } else {
-                    // Top Bar Select Controls
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("\(scanner.screenshots.count) Screenshots")
-                                .font(.headline)
-                            Text("Total size: \(StorageManager.formatBytes(scanner.totalScreenshotBytes)) • Swipe gallery mode")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                        
-                        Spacer()
-                        
-                        Button(selectedIDs.count == scanner.screenshots.count ? "Deselect All" : "Select All") {
-                            if selectedIDs.count == scanner.screenshots.count {
-                                selectedIDs.removeAll()
-                            } else {
-                                selectedIDs = Set(scanner.screenshots.map { $0.id })
-                            }
-                        }
-                        .font(.subheadline)
-                        .fontWeight(.bold)
-                        .foregroundColor(.purple)
-                    }
-                    .padding()
-                    
                     ScrollView {
                         GeometryReader { proxy in
                             Color.clear.preference(
@@ -76,7 +152,7 @@ struct ScreenshotsView: View {
                         .frame(height: 0)
                         
                         LazyVGrid(columns: columns, spacing: 10) {
-                            ForEach(Array(scanner.screenshots.enumerated()), id: \.element.id) { index, item in
+                            ForEach(Array(sortedScreenshots.enumerated()), id: \.element.id) { index, item in
                                 ZStack(alignment: .topTrailing) {
                                     Color.clear
                                         .frame(height: 180)
@@ -86,7 +162,7 @@ struct ScreenshotsView: View {
                                         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                                         .overlay(
                                             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                                .stroke(selectedIDs.contains(item.id) ? Color.purple : Color.clear, lineWidth: 3)
+                                                .stroke(selectedIDs.contains(item.id) ? Color(red: 0.13, green: 0.77, blue: 0.36) : Color.clear, lineWidth: 3)
                                         )
                                     
                                     Button(action: {
@@ -98,7 +174,7 @@ struct ScreenshotsView: View {
                                     }) {
                                         Image(systemName: selectedIDs.contains(item.id) ? "checkmark.circle.fill" : "circle")
                                             .font(.system(size: 22))
-                                            .foregroundColor(selectedIDs.contains(item.id) ? .purple : .white.opacity(0.85))
+                                            .foregroundColor(selectedIDs.contains(item.id) ? Color(red: 0.13, green: 0.77, blue: 0.36) : .white.opacity(0.85))
                                             .shadow(color: Color.black.opacity(0.3), radius: 2)
                                             .padding(6)
                                     }
@@ -135,25 +211,25 @@ struct ScreenshotsView: View {
                             }
                         }
                         .padding(.horizontal)
-                        .padding(.bottom, selectedIDs.isEmpty ? 90 : 160)
+                        .padding(.bottom, selectedIDs.isEmpty ? 90 : 150)
                     }
                     .coordinateSpace(name: "screenshotsScroll")
                     .onPreferenceChange(ScrollOffsetPreferenceKey.self) { currentOffset in
                         guard previewIndex == nil else { return }
                         let delta = currentOffset - lastScrollOffset
-                        if currentOffset > -15 {
+                        if currentOffset > -10 {
                             if !isTabBarVisible {
                                 withAnimation(.easeInOut(duration: 0.3)) {
                                     isTabBarVisible = true
                                 }
                             }
-                        } else if delta < -12 {
+                        } else if delta < -5 {
                             if isTabBarVisible {
                                 withAnimation(.easeInOut(duration: 0.3)) {
                                     isTabBarVisible = false
                                 }
                             }
-                        } else if delta > 12 {
+                        } else if delta > 5 {
                             if !isTabBarVisible {
                                 withAnimation(.easeInOut(duration: 0.3)) {
                                     isTabBarVisible = true
@@ -166,40 +242,43 @@ struct ScreenshotsView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             
-            // Floating Delete Action Bar
+            // Compact Floating Clean Action Bar
             if !selectedIDs.isEmpty {
-                HStack(spacing: 16) {
+                HStack(spacing: 12) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("\(selectedIDs.count) Screenshots Selected")
+                        Text("\(selectedIDs.count) Selected")
                             .font(.subheadline)
                             .fontWeight(.bold)
                         Text("Reclaim \(StorageManager.formatBytes(selectedBytes))")
-                            .font(.caption)
-                            .foregroundColor(.purple)
+                            .font(.caption2)
+                            .foregroundColor(Color(red: 0.13, green: 0.77, blue: 0.36))
                             .fontWeight(.semibold)
                     }
                     
                     Spacer()
                     
                     Button(action: { showReviewModal = true }) {
-                        HStack(spacing: 8) {
+                        HStack(spacing: 6) {
                             Image(systemName: "trash.fill")
-                            Text("Clean Selected")
+                                .font(.caption)
+                            Text("Delete")
+                                .font(.subheadline)
+                                .fontWeight(.bold)
                         }
-                        .font(.headline)
                         .foregroundColor(.white)
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 12)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
                         .background(
                             Capsule()
-                                .fill(Color.purple)
-                                .shadow(color: Color.purple.opacity(0.4), radius: 8, x: 0, y: 4)
+                                .fill(Color(red: 0.13, green: 0.77, blue: 0.36))
+                                .shadow(color: Color(red: 0.13, green: 0.77, blue: 0.36).opacity(0.35), radius: 6, x: 0, y: 3)
                         )
                     }
                 }
-                .padding(16)
-                .liquidGlassCard(cornerRadius: 26, highlightOpacity: 0.4)
-                .padding(.horizontal, 16)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .liquidGlassCard(cornerRadius: 20, highlightOpacity: 0.4)
+                .padding(.horizontal, 20)
                 .padding(.bottom, isTabBarVisible ? 82 : 16)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
@@ -207,7 +286,7 @@ struct ScreenshotsView: View {
             // Full Screen Swipable Gallery Modal
             if let index = previewIndex {
                 ImagePreviewGalleryModal(
-                    items: scanner.screenshots,
+                    items: sortedScreenshots,
                     selectedIndex: index,
                     cleaner: cleaner,
                     vaultManager: vaultManager,
@@ -223,8 +302,6 @@ struct ScreenshotsView: View {
                 .ignoresSafeArea()
             }
         }
-        .navigationTitle("Screenshots")
-        .navigationBarTitleDisplayMode(.inline)
         .onChange(of: previewIndex) { newIndex in
             withAnimation(.easeInOut(duration: 0.25)) {
                 isTabBarVisible = (newIndex == nil)

@@ -52,7 +52,7 @@ extension View {
     }
 }
 
-// MARK: - Async PHAsset Thumbnail View
+// MARK: - Async PHAsset Thumbnail / Full View
 struct PHAssetImageView: View {
     let asset: PHAsset
     let targetSize: CGSize
@@ -90,7 +90,9 @@ struct PHAssetImageView: View {
         options.deliveryMode = .opportunistic
         options.isNetworkAccessAllowed = true
         
-        manager.requestImage(for: asset, targetSize: targetSize, contentMode: .aspectFill, options: options) { img, _ in
+        let phContentMode: PHImageContentMode = (contentMode == .fill) ? .aspectFill : .aspectFit
+        
+        manager.requestImage(for: asset, targetSize: targetSize, contentMode: phContentMode, options: options) { img, _ in
             DispatchQueue.main.async {
                 self.image = img
             }

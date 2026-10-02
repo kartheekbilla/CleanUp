@@ -5,6 +5,7 @@ struct SimilarPhotosView: View {
     @ObservedObject var scanner: PhotoLibraryScanner
     @ObservedObject var cleaner: MediaCleaner
     @Binding var isTabBarVisible: Bool
+    var onBack: (() -> Void)? = nil
     @StateObject private var vaultManager = VaultManager()
     
     @State private var selectedItems: Set<String> = []
@@ -12,9 +13,18 @@ struct SimilarPhotosView: View {
     @State private var showReviewModal: Bool = false
     @State private var showCompletionScreen: Bool = false
     @State private var lastScrollOffset: CGFloat = 0
+    @State private var isSortAscending: Bool = false
+    
+    var sortedGroups: [PhotoGroup] {
+        if isSortAscending {
+            return scanner.photoGroups.sorted { $0.items.count < $1.items.count }
+        } else {
+            return scanner.photoGroups.sorted { $0.items.count > $1.items.count }
+        }
+    }
     
     var allGroupedPhotos: [PhotoAssetItem] {
-        scanner.photoGroups.flatMap { $0.items }
+        sortedGroups.flatMap { $0.items }
     }
     
     var selectedPhotoAssets: [PhotoAssetItem] {
@@ -25,13 +35,108 @@ struct SimilarPhotosView: View {
         selectedPhotoAssets.reduce(0) { $0 + $1.fileSize }
     }
     
+    var totalGroupedBytes: Int64 {
+        allGroupedPhotos.reduce(0) { $0 + $1.fileSize }
+    }
+    
+    var allSelected: Bool {
+        !allGroupedPhotos.isEmpty && selectedItems.count == allGroupedPhotos.count
+    }
+    
     var body: some View {
         ZStack(alignment: .bottom) {
             VStack(spacing: 0) {
+                // Category Header matching reference design
+                VStack(spacing: 12) {
+                    HStack(alignment: .center, spacing: 12) {
+                        if let onBack = onBack {
+                            Button(action: onBack) {
+                                Image(systemName: "chevron.left")
+                                    .font(.system(size: 16, weight: .bold))
+                                    .foregroundColor(.primary)
+                                    .padding(10)
+                                    .background(
+                                        Circle()
+                                            .fill(Color(UIColor.secondarySystemGroupedBackground))
+                                            .shadow(color: Color.black.opacity(0.06), radius: 4, x: 0, y: 2)
+                                    )
+                            }
+                        }
+                        
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Similars")
+                                .font(.system(size: 24, weight: .bold))
+                                .foregroundColor(.primary)
+                            
+                            HStack(spacing: 6) {
+                                Text("\(allGroupedPhotos.count) items • \(StorageManager.formatBytes(totalGroupedBytes))")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                
+                                Text("•")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                
+                                HStack(spacing: 3) {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .font(.caption2)
+                                        .foregroundColor(Color(red: 0.13, green: 0.77, blue: 0.36))
+                                    Text("Ready to clean")
+                                        .font(.caption2)
+                                        .fontWeight(.semibold)
+                                        .foregroundColor(Color(red: 0.13, green: 0.77, blue: 0.36))
+                                }
+                            }
+                        }
+                        
+                        Spacer()
+                        
+                        HStack(spacing: 8) {
+                            Button(action: {
+                                if allSelected {
+                                    selectedItems.removeAll()
+                                } else {
+                                    selectedItems = Set(allGroupedPhotos.map { $0.id })
+                                }
+                            }) {
+                                Text(allSelected ? "Deselect All" : "Select All")
+                                    .font(.subheadline)
+                                    .fontWeight(.bold)
+                                    .foregroundColor(Color(red: 0.13, green: 0.77, blue: 0.36))
+                                    .padding(.horizontal, 14)
+                                    .padding(.vertical, 7)
+                                    .background(
+                                        Capsule()
+                                            .fill(Color(red: 0.13, green: 0.77, blue: 0.36).opacity(0.15))
+                                    )
+                            }
+                            
+                            Button(action: {
+                                withAnimation {
+                                    isSortAscending.toggle()
+                                }
+                            }) {
+                                Image(systemName: "arrow.up.arrow.down")
+                                    .font(.subheadline)
+                                    .fontWeight(.semibold)
+                                    .foregroundColor(.primary)
+                                    .padding(8)
+                                    .background(
+                                        Circle()
+                                            .fill(Color(UIColor.secondarySystemGroupedBackground))
+                                    )
+                            }
+                        }
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .background(Color(UIColor.systemBackground))
+                
                 if scanner.photoGroups.isEmpty {
                     VStack(spacing: 16) {
                         Spacer()
-                        Image(systemName: "photo.on.rectangle.angled")
+                        Image(systemName: "sparkles")
                             .font(.system(size: 50))
                             .foregroundColor(.gray)
                         Text("No Similar Photos Found")
@@ -52,7 +157,7 @@ struct SimilarPhotosView: View {
                         .frame(height: 0)
                         
                         LazyVStack(spacing: 20, pinnedViews: [.sectionHeaders]) {
-                            ForEach(scanner.photoGroups) { group in
+                            ForEach(sortedGroups) { group in
                                 Section(
                                     header: GroupHeaderView(
                                         title: group.title,
@@ -62,9 +167,11 @@ struct SimilarPhotosView: View {
                                 ) {
                                     ScrollView(.horizontal, showsIndicators: false) {
                                         HStack(spacing: 14) {
-                                            ForEach(group.items) { item in
+                                            ForEach(Array(group.items.enumerated()), id: \.element.id) { index, item in
                                                 PhotoCardView(
                                                     item: item,
+                                                    indexInGroup: index + 1,
+                                                    totalInGroup: group.items.count,
                                                     isSelected: selectedItems.contains(item.id),
                                                     onToggle: {
                                                         if selectedItems.contains(item.id) {
@@ -90,7 +197,7 @@ struct SimilarPhotosView: View {
                             }
                         }
                         .padding(.top, 4)
-                        .padding(.bottom, selectedItems.isEmpty ? 90 : 160)
+                        .padding(.bottom, selectedItems.isEmpty ? 90 : 150)
                     }
                     .coordinateSpace(name: "similarScroll")
                     .onPreferenceChange(ScrollOffsetPreferenceKey.self) { currentOffset in
@@ -102,13 +209,13 @@ struct SimilarPhotosView: View {
                                     isTabBarVisible = true
                                 }
                             }
-                        } else if delta < -12 {
+                        } else if delta < -3 {
                             if isTabBarVisible {
                                 withAnimation(.easeInOut(duration: 0.3)) {
                                     isTabBarVisible = false
                                 }
                             }
-                        } else if delta > 12 {
+                        } else if delta > 3 {
                             if !isTabBarVisible {
                                 withAnimation(.easeInOut(duration: 0.3)) {
                                     isTabBarVisible = true
@@ -121,40 +228,43 @@ struct SimilarPhotosView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             
-            // Bottom Floating Clean Bar
+            // Compact Floating Clean Action Bar
             if !selectedItems.isEmpty {
-                HStack(spacing: 16) {
+                HStack(spacing: 12) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("\(selectedItems.count) Photos Selected")
+                        Text("\(selectedItems.count) Selected")
                             .font(.subheadline)
                             .fontWeight(.bold)
                         Text("Reclaim \(StorageManager.formatBytes(selectedBytes))")
-                            .font(.caption)
-                            .foregroundColor(.blue)
+                            .font(.caption2)
+                            .foregroundColor(Color(red: 0.13, green: 0.77, blue: 0.36))
                             .fontWeight(.semibold)
                     }
                     
                     Spacer()
                     
                     Button(action: { showReviewModal = true }) {
-                        HStack(spacing: 8) {
+                        HStack(spacing: 6) {
                             Image(systemName: "trash.fill")
-                            Text("Clean Selected")
+                                .font(.caption)
+                            Text("Delete")
+                                .font(.subheadline)
+                                .fontWeight(.bold)
                         }
-                        .font(.headline)
                         .foregroundColor(.white)
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 12)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
                         .background(
                             Capsule()
-                                .fill(Color.blue)
-                                .shadow(color: Color.blue.opacity(0.4), radius: 8, x: 0, y: 4)
+                                .fill(Color(red: 0.13, green: 0.77, blue: 0.36))
+                                .shadow(color: Color(red: 0.13, green: 0.77, blue: 0.36).opacity(0.35), radius: 6, x: 0, y: 3)
                         )
                     }
                 }
-                .padding(16)
-                .liquidGlassCard(cornerRadius: 26, highlightOpacity: 0.4)
-                .padding(.horizontal, 16)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .liquidGlassCard(cornerRadius: 20, highlightOpacity: 0.4)
+                .padding(.horizontal, 20)
                 .padding(.bottom, isTabBarVisible ? 82 : 16)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
@@ -179,8 +289,6 @@ struct SimilarPhotosView: View {
                 .ignoresSafeArea()
             }
         }
-        .navigationTitle("Similar Photos")
-        .navigationBarTitleDisplayMode(.inline)
         .onAppear {
             initSelections()
         }
@@ -240,7 +348,7 @@ struct GroupHeaderView: View {
             HStack(spacing: 6) {
                 Image(systemName: "sparkles")
                     .font(.caption)
-                    .foregroundColor(.blue)
+                    .foregroundColor(Color(red: 0.13, green: 0.77, blue: 0.36))
                 Text(title)
                     .font(.subheadline)
                     .fontWeight(.bold)
@@ -264,52 +372,44 @@ struct GroupHeaderView: View {
 
 struct PhotoCardView: View {
     let item: PhotoAssetItem
+    let indexInGroup: Int
+    let totalInGroup: Int
     let isSelected: Bool
     let onToggle: () -> Void
     let onLongPress: () -> Void
     
     var body: some View {
-        ZStack(alignment: .bottomLeading) {
+        ZStack(alignment: .bottom) {
             Color.clear
-                .frame(width: 160, height: 210)
+                .frame(width: 170, height: 220)
                 .overlay(
                     PHAssetImageView(asset: item.asset, targetSize: CGSize(width: 300, height: 400), contentMode: .fill)
                 )
                 .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .stroke(isSelected ? Color.blue : Color.white.opacity(0.3), lineWidth: isSelected ? 3 : 1)
+                        .stroke(isSelected ? Color(red: 0.13, green: 0.77, blue: 0.36) : Color.white.opacity(0.3), lineWidth: isSelected ? 3 : 1)
                 )
             
-            // Bottom Info Gradient Overlay
-            LinearGradient(
-                colors: [.black.opacity(0.85), .black.opacity(0.2), .clear],
-                startPoint: .bottom,
-                endPoint: .top
-            )
-            .frame(height: 70)
-            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-            
-            // Item Metadata (Size & Resolution)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(item.formattedSize)
-                    .font(.caption)
-                    .fontWeight(.bold)
-                    .foregroundColor(.white)
-                Text("\(item.pixelWidth) × \(item.pixelHeight)")
-                    .font(.caption2)
-                    .foregroundColor(.white.opacity(0.8))
-            }
-            .padding(10)
-            
-            // Selection Checkmark (Top Right)
+            // Item Metadata (Index & Size overlay)
             VStack {
                 HStack {
+                    if !item.isBest {
+                        Text("\(indexInGroup) of \(totalInGroup)")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 3)
+                            .background(Capsule().fill(Color.black.opacity(0.55)))
+                            .padding(8)
+                    }
                     Spacer()
+                    
+                    // Emerald Green Checkmark (Top Right)
                     Button(action: onToggle) {
                         Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
                             .font(.system(size: 24))
-                            .foregroundColor(isSelected ? .blue : .white.opacity(0.85))
+                            .foregroundColor(isSelected ? Color(red: 0.13, green: 0.77, blue: 0.36) : .white.opacity(0.85))
                             .shadow(color: Color.black.opacity(0.3), radius: 3)
                             .padding(8)
                     }
@@ -317,26 +417,41 @@ struct PhotoCardView: View {
                 Spacer()
             }
             
-            // Best Photo Badge (Top Left)
+            // Prominent "Best Shot" Banner anchored at the bottom
             if item.isBest {
-                VStack {
+                VStack(spacing: 0) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "star.fill")
+                            .font(.system(size: 13))
+                            .foregroundColor(.yellow)
+                        Text("Best Shot")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundColor(.white)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
+                    .background(Color(red: 0.13, green: 0.77, blue: 0.36))
+                }
+                .clipShape(CornerRadiusShape(radius: 18, corners: [.bottomLeft, .bottomRight]))
+            } else {
+                VStack(alignment: .leading, spacing: 2) {
                     HStack {
-                        HStack(spacing: 4) {
-                            Image(systemName: "star.fill")
-                                .font(.system(size: 10))
-                            Text("Best Photo")
-                                .font(.system(size: 10, weight: .bold))
-                        }
-                        .foregroundColor(.black)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Capsule().fill(Color.yellow))
-                        .padding(8)
-                        
+                        Text(item.formattedSize)
+                            .font(.caption2)
+                            .fontWeight(.bold)
+                            .foregroundColor(.white)
                         Spacer()
                     }
-                    Spacer()
                 }
+                .padding(8)
+                .background(
+                    LinearGradient(
+                        colors: [.black.opacity(0.7), .clear],
+                        startPoint: .bottom,
+                        endPoint: .top
+                    )
+                )
+                .clipShape(CornerRadiusShape(radius: 18, corners: [.bottomLeft, .bottomRight]))
             }
         }
         .contentShape(Rectangle())
@@ -346,5 +461,20 @@ struct PhotoCardView: View {
         .onLongPressGesture {
             onLongPress()
         }
+    }
+}
+
+// Shape Helper for bottom-only rounded corners
+struct CornerRadiusShape: Shape {
+    var radius: CGFloat = .infinity
+    var corners: UIRectCorner = .allCorners
+
+    func path(in rect: CGRect) -> Path {
+        let path = UIBezierPath(
+            roundedRect: rect,
+            byRoundingCorners: corners,
+            cornerRadii: CGSize(width: radius, height: radius)
+        )
+        return Path(path.cgPath)
     }
 }
