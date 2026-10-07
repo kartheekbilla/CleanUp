@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		470E912E307665EC005E783E /* README.md in Resources */ = {isa = PBXBuildFile; fileRef = 470E912D307665EC005E783E /* README.md */; };
 		47A65288306C3449007CEF75 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 47A65287306C3449007CEF75 /* WidgetKit.framework */; };
 		47A6528A306C3449007CEF75 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 47A65289306C3449007CEF75 /* SwiftUI.framework */; };
 		47A6529B306C344B007CEF75 /* StorageWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 47A65285306C3449007CEF75 /* StorageWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -36,6 +37,7 @@
 
 /* Begin PBXFileReference section */
 		000000000000000000000120 /* Cleanup.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Cleanup.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		470E912D307665EC005E783E /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
 		47A65285306C3449007CEF75 /* StorageWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = StorageWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		47A65287306C3449007CEF75 /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
 		47A65289306C3449007CEF75 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
@@ -90,6 +92,7 @@
 				47A6528B306C3449007CEF75 /* StorageWidget */,
 				47A65286306C3449007CEF75 /* Frameworks */,
 				000000000000000000000020 /* Products */,
+				470E912D307665EC005E783E /* README.md */,
 			);
 			sourceTree = "<group>";
 		};
@@ -196,6 +199,7 @@
 		000000000000000140000000 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			files = (
+				470E912E307665EC005E783E /* README.md in Resources */,
 			);
 		};
 		47A65283306C3449007CEF75 /* Resources */ = {
